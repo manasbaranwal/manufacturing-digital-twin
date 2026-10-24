@@ -1,0 +1,118 @@
+import { useEffect, useState } from 'react';
+
+function formatNumber(value) {
+  return Number(value).toFixed(1);
+}
+
+export default function App() {
+  const [telemetry, setTelemetry] = useState({ machines: [] });
+  const [analytics, setAnalytics] = useState({ machine: [], alerts: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [telemetryRes, analyticsRes] = await Promise.all([
+          fetch('/api/telemetry'),
+          fetch('/api/analytics'),
+        ]);
+
+        const telemetryData = await telemetryRes.json();
+        const analyticsData = await analyticsRes.json();
+
+        setTelemetry(telemetryData);
+        setAnalytics(analyticsData);
+      } catch (error) {
+        console.error('Failed to fetch digital twin data', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const timer = setInterval(fetchData, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">Manufacturing Digital Twin</p>
+          <h1>Factory Operations Console</h1>
+        </div>
+        <div className="status-pill">Live Data</div>
+      </header>
+
+      {loading ? (
+        <div className="loading">Loading telemetry…</div>
+      ) : (
+        <>
+          <section className="metrics-grid">
+            <div className="metric-card accent-blue">
+              <span>Overall Efficiency</span>
+              <strong>{formatNumber(analytics.overall_efficiency_pct)}%</strong>
+            </div>
+            <div className="metric-card accent-green">
+              <span>Total Throughput</span>
+              <strong>{formatNumber(analytics.total_throughput_per_hour)} units/hr</strong>
+            </div>
+            <div className="metric-card accent-orange">
+              <span>Active Alerts</span>
+              <strong>{analytics.alerts.length}</strong>
+            </div>
+            <div className="metric-card accent-purple">
+              <span>Updated</span>
+              <strong>{new Date(telemetry.timestamp).toLocaleTimeString()}</strong>
+            </div>
+          </section>
+
+          <section className="content-grid">
+            <div className="panel">
+              <h2>Machine Status</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Machine</th>
+                    <th>Line</th>
+                    <th>Temp</th>
+                    <th>Vibration</th>
+                    <th>Output</th>
+                    <th>Efficiency</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {telemetry.machines.map((machine) => (
+                    <tr key={machine.id}>
+                      <td>{machine.name}</td>
+                      <td>{machine.line}</td>
+                      <td>{formatNumber(machine.temperature_c)}°C</td>
+                      <td>{formatNumber(machine.vibration_mm_s)} mm/s</td>
+                      <td>{formatNumber(machine.throughput_per_hour)}/hr</td>
+                      <td>{formatNumber(machine.efficiency_pct)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="panel">
+              <h2>Operational Alerts</h2>
+              <ul className="alert-list">
+                {analytics.alerts.map((alert, index) => (
+                  <li key={`${alert.machine_id}-${index}`} className={`alert alert-${alert.severity.toLowerCase()}`}>
+                    <span className="severity">{alert.severity}</span>
+                    <div>
+                      <strong>{alert.machine_id}</strong>
+                      <p>{alert.message}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
